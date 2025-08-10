@@ -1,614 +1,445 @@
 local Players = game:GetService("Players")
-local VirtualUser = game:GetService("VirtualUser")
-local Player = Players.LocalPlayer
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
 
--- IDs permitidos (igual que antes)
-local allowedUserIds = {
-    2667228151, 4095731659, 1408914708, 2796344544, 7613083080, 7293740215, 5108572823,
-    3696490368, 4488303849, 1324424400, 1086868382, 2635475747, 2219273992, 1651313494,
-    7518436281, 5379634121, 2220474972, 5178782812, 1794232981, 8497330270, 5476915769,
-    8157514843, 2002271267, 8017975402, 2684795167, 5705258496, 7987137688, 3131191073,
-    7958547639, 4536137506, 2899338888, 7846593406, 5092801562, 1495204273, 7920908926,
-    1923659078, 2051969082, 1769262077, 7942357477, 4828373510, 3565491658
-}
-
-local isAllowed = false
-for _, id in ipairs(allowedUserIds) do
-    if Player.UserId == id then
-        isAllowed = true
-        break
-    end
-end
-if not isAllowed then
-    Player:Kick("No tienes permiso para ejecutar este Script.")
-    return
-end
-
--- Anti AFK
-local function preventAFK()
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end
-Player.Idled:Connect(preventAFK)
-
-local library = loadstring(game:HttpGet(
-    "https://raw.githubusercontent.com/memejames/elerium-v2-ui-library/main/Library", true
-))()
-
-local window = library:AddWindow("Auto kill V2", {
-    main_color = Color3.fromRGB(139, 0, 0),
-    min_size = Vector2.new(615, 550),
-    can_resize = false,
-})
-
-local Killing = window:AddTab("Killing")
-
--- Variables whitelist
-local usernameWhitelist = {}
-local displayNameWhitelist = {}
-
-local function isWhitelisted(target)
-    for _, name in ipairs(usernameWhitelist) do
-        if target.Name == name then return true end
-    end
-    for _, name in ipairs(displayNameWhitelist) do
-        if target.DisplayName == name then return true end
-    end
-    return false
-end
-
-local whitelistLabel = Killing:AddLabel("Whitelist: Vacía")
-
-local function updateWhitelistLabel()
-    local combined = {}
-    for _, name in ipairs(usernameWhitelist) do
-        table.insert(combined, "[Username] "..name)
-    end
-    for _, name in ipairs(displayNameWhitelist) do
-        table.insert(combined, "[DisplayName] "..name)
-    end
-    whitelistLabel:SetText("Whitelist: "..(#combined > 0 and table.concat(combined, ", ") or "Vacía"))
-end
-
--- Auto Punch switch
-local autoPunchNoAnim = false
-Killing:AddSwitch("Auto Punch", function(state)
-    autoPunchNoAnim = state
-    while autoPunchNoAnim do
-        local player = Players.LocalPlayer
-        local playerName = player.Name
-        local punchTool = player.Backpack:FindFirstChild("Punch") or workspace:FindFirstChild(playerName):FindFirstChild("Punch")
-        if punchTool then
-            if punchTool.Parent ~= workspace:FindFirstChild(playerName) then
-                punchTool.Parent = workspace:FindFirstChild(playerName)
-            end
-            player.muscleEvent:FireServer("punch", "rightHand")
-            player.muscleEvent:FireServer("punch", "leftHand")
-        else
-            autoPunchNoAnim = false
-        end
-        wait()
-    end
-end)
-
--- Agregar username a whitelist
-Killing:AddTextBox("Agregar Username a Whitelist", function(text)
-    if text and text ~= "" and not table.find(usernameWhitelist, text) then
-        table.insert(usernameWhitelist, text)
-        updateWhitelistLabel()
-    end
-end)
-
--- Botón para quitar último Username
-Killing:AddButton("Quitar último Username de Whitelist", function()
-    if #usernameWhitelist > 0 then
-        table.remove(usernameWhitelist)
-        updateWhitelistLabel()
-    end
-end)
-
--- Agregar displayname a whitelist
-Killing:AddTextBox("Agregar DisplayName a Whitelist", function(text)
-    if text and text ~= "" and not table.find(displayNameWhitelist, text) then
-        table.insert(displayNameWhitelist, text)
-        updateWhitelistLabel()
-    end
-end)
-
--- Botón para quitar último DisplayName
-Killing:AddButton("Quitar último DisplayName de Whitelist", function()
-    if #displayNameWhitelist > 0 then
-        table.remove(displayNameWhitelist)
-        updateWhitelistLabel()
-    end
-end)
-
--- Tamaño NaN
-Killing:AddButton("Tamaño NaN", function()
-    local args = {"changeSize", 0/0}
-    game:GetService("ReplicatedStorage"):WaitForChild("rEvents"):WaitForChild("changeSpeedSizeRemote"):InvokeServer(unpack(args))
-end)
-local button = Killing:AddButton("Remove Attack Animations", function()
-    local blockedAnimations = {
-        ["rbxassetid://3638729053"] = true,
-        ["rbxassetid://3638767427"] = true,
-    }
-
-    local function setupAnimationBlocking()
-        local char = game.Players.LocalPlayer.Character
-        if not char or not char:FindFirstChild("Humanoid") then return end
-
-        local humanoid = char:FindFirstChild("Humanoid")
-
-        for _, track in pairs(humanoid:GetPlayingAnimationTracks()) do
-            if track.Animation then
-                local animId = track.Animation.AnimationId
-                local animName = track.Name:lower()
-
-                if blockedAnimations[animId] or
-                    animName:match("punch") or
-                    animName:match("attack") or
-                    animName:match("right") then
-                    track:Stop()
-                end
-            end
-        end
-
-        if not _G.AnimBlockConnection then
-            local connection = humanoid.AnimationPlayed:Connect(function(track)
-                if track.Animation then
-                    local animId = track.Animation.AnimationId
-                    local animName = track.Name:lower()
-
-                    if blockedAnimations[animId] or
-                        animName:match("punch") or
-                        animName:match("attack") or
-                        animName:match("right") then
-                        track:Stop()
-                    end
-                end
-            end)
-
-            _G.AnimBlockConnection = connection
-        end
-    end
-
-    setupAnimationBlocking()
-
-    local function overrideToolActivation()
-        local function processTool(tool)
-            if tool and (tool.Name == "Punch" or tool.Name:match("Attack") or tool.Name:match("Right")) then
-                if not tool:GetAttribute("ActivatedOverride") then
-                    tool:SetAttribute("ActivatedOverride", true)
-
-                    local connection = tool.Activated:Connect(function()
-                        task.wait(0.05)
-
-                        local char = game.Players.LocalPlayer.Character
-                        if char and char:FindFirstChild("Humanoid") then
-                            for _, track in pairs(char.Humanoid:GetPlayingAnimationTracks()) do
-                                if track.Animation then
-                                    local animId = track.Animation.AnimationId
-                                    local animName = track.Name:lower()
-
-                                    if blockedAnimations[animId] or
-                                        animName:match("punch") or
-                                        animName:match("attack") or
-                                        animName:match("right") then
-                                        track:Stop()
-                                    end
-                                end
-                            end
-                        end
-                    end)
-
-                    if not _G.ToolConnections then
-                        _G.ToolConnections = {}
-                    end
-                    _G.ToolConnections[tool] = connection
-                end
-            end
-        end
-
-        for _, tool in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
-            processTool(tool)
-        end
-
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            for _, tool in pairs(char:GetChildren()) do
-                if tool:IsA("Tool") then
-                    processTool(tool)
-                end
-            end
-        end
-
-        if not _G.BackpackAddedConnection then
-            _G.BackpackAddedConnection = game.Players.LocalPlayer.Backpack.ChildAdded:Connect(function(child)
-                if child:IsA("Tool") then
-                    task.wait(0.1)
-                    processTool(child)
-                end
-            end)
-        end
-
-        if not _G.CharacterToolAddedConnection and char then
-            _G.CharacterToolAddedConnection = char.ChildAdded:Connect(function(child)
-                if child:IsA("Tool") then
-                    task.wait(0.1)
-                    processTool(child)
-                end
-            end)
-        end
-    end
-
-    overrideToolActivation()
-
-    if not _G.AnimMonitorConnection then
-        _G.AnimMonitorConnection = game:GetService("RunService").Heartbeat:Connect(function()
-            if tick() % 0.5 < 0.01 then
-                local char = game.Players.LocalPlayer.Character
-                if char and char:FindFirstChild("Humanoid") then
-                    for _, track in pairs(char.Humanoid:GetPlayingAnimationTracks()) do
-                        if track.Animation then
-                            local animId = track.Animation.AnimationId
-                            local animName = track.Name:lower()
-
-                            if blockedAnimations[animId] or
-                                animName:match("punch") or
-                                animName:match("attack") or
-                                animName:match("right") then
-                                track:Stop()
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    end
-
-    if not _G.CharacterAddedConnection then
-        _G.CharacterAddedConnection = game.Players.LocalPlayer.CharacterAdded:Connect(function(newChar)
-            task.wait(1)
-            setupAnimationBlocking()
-            overrideToolActivation()
-
-            if _G.CharacterToolAddedConnection then
-                _G.CharacterToolAddedConnection:Disconnect()
-            end
-
-            _G.CharacterToolAddedConnection = newChar.ChildAdded:Connect(function(child)
-                if child:IsA("Tool") then
-                    task.wait(0.1)
-                    processTool(child)
-                end
-            end)
-        end)
-    end
-end)
-
-local restoreButton = Killing:AddButton("Restore Punch Animation", function()
-    if _G.AnimBlockConnection then
-        _G.AnimBlockConnection:Disconnect()
-        _G.AnimBlockConnection = nil
-
-        local char = game.Players.LocalPlayer.Character
-        if char then
-            char:SetAttribute("AnimBlockConnection", false)
-        end
-    end
-
-    if _G.AnimMonitorConnection then
-        _G.AnimMonitorConnection:Disconnect()
-        _G.AnimMonitorConnection = nil
-    end
-
-    if _G.ToolConnections then
-        for tool, connection in pairs(_G.ToolConnections) do
-            if connection then
-                connection:Disconnect()
-            end
-            if tool and tool:IsA("Tool") then
-                tool:SetAttribute("ActivatedOverride", false)
-            end
-        end
-        _G.ToolConnections = {}
-    end
-end)
--- Auto Kill switch
-local autoKill = false
-Killing:AddSwitch("Auto Kill", function(bool)
-    autoKill = bool
-    while autoKill do
-        for _, target in ipairs(Players:GetPlayers()) do
-            if target ~= Player and not isWhitelisted(target) then
-                local rootPart = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    local rightHand = Player.Character and Player.Character:FindFirstChild("RightHand")
-                    local leftHand = Player.Character and Player.Character:FindFirstChild("LeftHand")
-                    if rightHand and leftHand then
-                        firetouchinterest(rightHand, rootPart, 1)
-                        firetouchinterest(leftHand, rootPart, 1)
-                        firetouchinterest(rightHand, rootPart, 0)
-                        firetouchinterest(leftHand, rootPart, 0)
-                    end
-                end
-            end
-        end
-        wait(0.1)
-    end
-end)
-
--- Auto Kill Player switch
-local targetPlayerName = nil
-Killing:AddTextBox("Player Username para Auto Kill", function(text)
-    targetPlayerName = text
-end)
-
-local killTarget = false
-Killing:AddSwitch("Auto Kill Player", function(bool)
-    killTarget = bool
-    while killTarget do
-        local target = Players:FindFirstChild(targetPlayerName)
-        if target and target ~= Player and not isWhitelisted(target) then
-            local rootPart = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                local rightHand = Player.Character and Player.Character:FindFirstChild("RightHand")
-                local leftHand = Player.Character and Player.Character:FindFirstChild("LeftHand")
-                if rightHand and leftHand then
-                    firetouchinterest(rightHand, rootPart, 1)
-                    firetouchinterest(leftHand, rootPart, 1)
-                    firetouchinterest(rightHand, rootPart, 0)
-                    firetouchinterest(leftHand, rootPart, 0)
-                end
-            end
-        end
-        RunService.Stepped:Wait()
-    end
-end)
-
--- View Player (mejorado, con cámara que sigue siempre y permite moverla)
-local viewTargetName = nil
-local isViewing = false
-local camera = workspace.CurrentCamera
-local connectionCharacterAdded = nil
-local connectionHumanoidDied = nil
-local connectionPlayerRemoving = nil
-local connectionPlayerCharacterAdded = nil
-
-local function updateCameraToTarget(target)
-    if not target or not target.Character then return end
-    local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
-    if humanoid and humanoid.Health > 0 then
-        camera.CameraSubject = humanoid
-    else
-        local rootPart = target.Character:FindFirstChild("HumanoidRootPart")
-        if rootPart then
-            camera.CameraSubject = rootPart
-        else
-            camera.CameraSubject = nil
-        end
-    end
-end
-
-local function onTargetCharacterAdded(char)
-    if not isViewing or not viewTargetName then return end
-    local target = Players:FindFirstChild(viewTargetName)
-    if target and target.Character == char then
-        updateCameraToTarget(target)
-        if connectionHumanoidDied then connectionHumanoidDied:Disconnect() end
-        local humanoid = char:WaitForChild("Humanoid", 10)
-        if humanoid then
-            connectionHumanoidDied = humanoid.Died:Connect(function()
-                -- No hacemos nada
-            end)
-        end
-    end
-end
-
-local function onLocalCharacterAdded(char)
-    if isViewing and viewTargetName then
-        local target = Players:FindFirstChild(viewTargetName)
-        if target then
-            updateCameraToTarget(target)
-        end
-    end
-end
-
-local function startViewing(target)
-    if not target then return end
-    isViewing = true
-    viewTargetName = target.Name
-
-    updateCameraToTarget(target)
-
-    if connectionCharacterAdded then connectionCharacterAdded:Disconnect() end
-    connectionCharacterAdded = target.CharacterAdded:Connect(onTargetCharacterAdded)
-
-    if connectionHumanoidDied then connectionHumanoidDied:Disconnect() end
-    local humanoid = target.Character and target.Character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        connectionHumanoidDied = humanoid.Died:Connect(function()
-            -- No hacemos nada
-        end)
-    end
-
-    if connectionPlayerRemoving then connectionPlayerRemoving:Disconnect() end
-    connectionPlayerRemoving = Players.PlayerRemoving:Connect(function(player)
-        if player.Name == viewTargetName then
-            stopViewing()
-        end
-    end)
-
-    if connectionPlayerCharacterAdded then connectionPlayerCharacterAdded:Disconnect() end
-    connectionPlayerCharacterAdded = Player.CharacterAdded:Connect(onLocalCharacterAdded)
-end
-
-function stopViewing()
-    if not isViewing then return end
-    isViewing = false
-    viewTargetName = nil
-
-    if Player.Character and Player.Character:FindFirstChildOfClass("Humanoid") and Player.Character.Humanoid.Health > 0 then
-        camera.CameraSubject = Player.Character:FindFirstChildOfClass("Humanoid")
-    else
-        camera.CameraSubject = nil
-    end
-
-    if connectionCharacterAdded then connectionCharacterAdded:Disconnect() connectionCharacterAdded = nil end
-    if connectionHumanoidDied then connectionHumanoidDied:Disconnect() connectionHumanoidDied = nil end
-    if connectionPlayerRemoving then connectionPlayerRemoving:Disconnect() connectionPlayerRemoving = nil end
-    if connectionPlayerCharacterAdded then connectionPlayerCharacterAdded:Disconnect() connectionPlayerCharacterAdded = nil end
-end
-
-local viewPlayerTextBox = Killing:AddTextBox("View Player Username", function(text)
-    viewTargetName = text
-end)
-
-local viewPlayerSwitch = Killing:AddSwitch("View Player", function(state)
-    if state then
-        local target = Players:FindFirstChild(viewTargetName)
-        if target and target ~= Player then
-            startViewing(target)
-        else
-            print("Jugador no encontrado o inválido para espectar.")
-            viewPlayerSwitch:Set(false)
-        end
-    else
-        stopViewing()
-    end
-end)
-
-Killing:AddButton("Dejar de Espectear", function()
-    stopViewing()
-    viewPlayerSwitch:Set(false)
-end)
-
--- Pegar muerto como botón
-Killing:AddButton("Pegar muerto", function()
-    local scripts = {
-        "https://raw.githubusercontent.com/PheonixHub/No-comer-eggs/refs/heads/main/No%20comer%20eggs",
-        "https://raw.githubusercontent.com/PheonixHub/Anti-lag/refs/heads/main/Anti%20lag",
-        "https://raw.githubusercontent.com/PheonixHub/Auto-pi-as/refs/heads/main/Pi%C3%B1as%20comer",
-        "https://raw.githubusercontent.com/PheonixHub/Auto-punch-remote/refs/heads/main/Auto%20punch",
-        "https://raw.githubusercontent.com/PheonixHub/Auto-egg-kill/refs/heads/main/Kill%20egg",
-    }
-    task.spawn(function()
-        for _, url in ipairs(scripts) do
-            if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then break end
-            local success, result = pcall(function()
-                return loadstring(game:HttpGet(url))()
-            end)
-            if success then
-                print("✅ Script ejecutado:", url)
-            else
-                warn("❌ Error al ejecutar script:", url, "\n", result)
-            end
-            task.wait()
-        end
+-- Anti-AFK
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     end)
 end)
 
+-- Global variables
+local selectedPlayers = {}
+local isActive = false
+local deadHitsEnabled = false
+local bringConnection
+local antiTouchEnabled = false
 
-local godModeToggle = false
-Killing:AddSwitch("God Mode (Brawl)", function(State)
-    godModeToggle = State
-    if State then
+-- GUI Setup
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "HONNY_GUI"
+
+-- Toggle Button
+local ToggleButton = Instance.new("TextButton", ScreenGui)
+ToggleButton.Size = UDim2.new(0, 140, 0, 40)
+ToggleButton.Position = UDim2.new(0, 10, 0, 10)
+ToggleButton.Text = "LoopBring: OFF"
+ToggleButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+ToggleButton.TextScaled = true
+ToggleButton.Font = Enum.Font.SourceSansBold
+
+-- Minibar (when minimized)
+local MiniBar = Instance.new("TextButton", ScreenGui)
+MiniBar.Size = UDim2.new(0, 200, 0, 30)
+MiniBar.Position = UDim2.new(0, 10, 0, 60)
+MiniBar.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+MiniBar.BackgroundTransparency = 0.4
+MiniBar.Text = "HONNY HUB | SCRIPT KILL"
+MiniBar.TextColor3 = Color3.new(1, 1, 1)
+MiniBar.TextScaled = true
+MiniBar.Font = Enum.Font.SourceSansBold
+MiniBar.Visible = false
+
+-- Control Frame
+local ControlFrame = Instance.new("Frame", ScreenGui)
+ControlFrame.Size = UDim2.new(0, 300, 0, 300)
+ControlFrame.Position = UDim2.new(0, 10, 0, 60)
+ControlFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+ControlFrame.BorderSizePixel = 0
+ControlFrame.Active = true
+ControlFrame.Draggable = true
+
+-- Minimize Button
+local MinimizeButton = Instance.new("TextButton", ControlFrame)
+MinimizeButton.Size = UDim2.new(1, 0, 0, 25)
+MinimizeButton.Position = UDim2.new(0, 0, 0, 0)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+MinimizeButton.Text = "Minimize"
+MinimizeButton.TextScaled = true
+MinimizeButton.Font = Enum.Font.SourceSansBold
+
+-- LoopBring Panel
+local LoopBringPanel = Instance.new("ScrollingFrame", ControlFrame)
+LoopBringPanel.Size = UDim2.new(0.5, -5, 1, -25)
+LoopBringPanel.Position = UDim2.new(0, 0, 0, 25)
+LoopBringPanel.CanvasSize = UDim2.new(0, 0, 0, 0)
+LoopBringPanel.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LoopBringPanel.ScrollBarThickness = 6
+LoopBringPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+local UIListLayout = Instance.new("UIListLayout", LoopBringPanel)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 4)
+
+-- Function to create player button
+local function addPlayerButton(player)
+    if player == LocalPlayer then return end
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 30)
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.TextScaled = true
+    btn.Font = Enum.Font.SourceSansBold
+    btn.Text = player.Name
+    btn.Parent = LoopBringPanel
+
+    btn.MouseButton1Click:Connect(function()
+        if selectedPlayers[player] then
+            selectedPlayers[player] = nil
+            btn.Text = player.Name
+            btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        else
+            selectedPlayers[player] = true
+            btn.Text = player.Name .. " Ã¢Å“â€œ"
+            btn.BackgroundColor3 = Color3.fromRGB(70, 120, 70)
+        end
+    end)
+end
+
+-- Add current players
+for _, player in ipairs(Players:GetPlayers()) do
+    addPlayerButton(player)
+end
+
+-- Detect players joining
+Players.PlayerAdded:Connect(addPlayerButton)
+
+-- Dead Hits Panel
+local DeadPanel = Instance.new("Frame", ControlFrame)
+DeadPanel.Size = UDim2.new(0.5, -5, 1, -25)
+DeadPanel.Position = UDim2.new(0.5, 5, 0, 25)
+DeadPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+-- Dead Hits Button
+local DeadButton = Instance.new("TextButton", DeadPanel)
+DeadButton.Size = UDim2.new(1, -10, 0, 40)
+DeadButton.Position = UDim2.new(0, 5, 0, 5)
+DeadButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+DeadButton.Text = "Dead Hits"
+DeadButton.TextColor3 = Color3.new(1, 1, 1)
+DeadButton.Font = Enum.Font.GothamBold
+DeadButton.TextScaled = true
+
+-- Anti Touch Button
+local AntiTouchButton = Instance.new("TextButton", DeadPanel)
+AntiTouchButton.Size = UDim2.new(1, -10, 0, 40)
+AntiTouchButton.Position = UDim2.new(0, 5, 0, 50)
+AntiTouchButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AntiTouchButton.Text = "ANTI TOUCH"
+AntiTouchButton.TextColor3 = Color3.new(1, 1, 1)
+AntiTouchButton.Font = Enum.Font.GothamBold
+AntiTouchButton.TextScaled = true
+
+-- Transparent blocker
+local observerGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+observerGui.Name = "ObserverGui"
+observerGui.ResetOnSpawn = false
+
+local blocker = Instance.new("Frame")
+blocker.Size = UDim2.new(1, 0, 1, 0)
+blocker.Position = UDim2.new(0, 0, 0, 0)
+blocker.BackgroundTransparency = 1
+blocker.BackgroundColor3 = Color3.new(0, 0, 0)
+blocker.Visible = false
+blocker.Active = true
+blocker.ZIndex = 10
+blocker.Parent = observerGui
+
+AntiTouchButton.MouseButton1Click:Connect(function()
+    antiTouchEnabled = not antiTouchEnabled
+    blocker.Visible = antiTouchEnabled
+    AntiTouchButton.Text = antiTouchEnabled and "ANTI TOUCH Ã¢Å“â€œ" or "ANTI TOUCH"
+end)
+
+-- Farm Panel
+local FarmPanel = Instance.new("Frame", ControlFrame)
+FarmPanel.Size = UDim2.new(0.5, -5, 1, -25)
+FarmPanel.Position = UDim2.new(1, 10, 0, 25) -- Ajustado a la derecha del DeadPanel
+FarmPanel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+
+-- Auto Repetition Button
+local autoRepActive = false
+local autoRepThread
+
+local AutoRepButton = Instance.new("TextButton", FarmPanel)
+AutoRepButton.Size = UDim2.new(1, -10, 0, 40)
+AutoRepButton.Position = UDim2.new(0, 5, 0, 5)
+
+-- Auto Rebirths Button
+local rebirthTarget = 1
+local rebirthLoopActive = false
+
+local AutoRebirthButton = Instance.new("TextButton", FarmPanel)
+AutoRebirthButton.Size = UDim2.new(1, -10, 0, 40)
+AutoRebirthButton.Position = UDim2.new(0, 5, 0, 50) -- debajo del anterior (5 + 40 + 5 de margen)
+AutoRebirthButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AutoRebirthButton.Text = "Auto Rebirths"
+AutoRebirthButton.TextColor3 = Color3.new(1, 1, 1)
+AutoRebirthButton.Font = Enum.Font.GothamBold
+AutoRebirthButton.TextScaled = true
+
+AutoRebirthButton.MouseButton1Click:Connect(function()
+    rebirthLoopActive = not rebirthLoopActive
+    AutoRebirthButton.Text = rebirthLoopActive and "Auto Rebirths Ã¢Å“â€œ" or "Auto Rebirths"
+    AutoRebirthButton.BackgroundColor3 = rebirthLoopActive and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(50, 50, 50)
+
+    if rebirthLoopActive then
         task.spawn(function()
-            while godModeToggle do
-                game:GetService("ReplicatedStorage").rEvents.brawlEvent:FireServer("joinBrawl")
-                task.wait()
+            local player = game.Players.LocalPlayer
+            local rEvents = game:GetService("ReplicatedStorage"):WaitForChild("rEvents")
+            local rebirthRemote = rEvents:WaitForChild("rebirthRemote")
+
+            while rebirthLoopActive and task.wait(0.5) do
+                local stats = player:FindFirstChild("leaderstats")
+                local rebirths = stats and stats:FindFirstChild("Rebirths")
+                if rebirths and tonumber(rebirths.Value) >= rebirthTarget then
+                    print("Rebirth goal reached.")
+                    AutoRebirthButton.Text = "Auto Rebirths"
+                    AutoRebirthButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+                    rebirthLoopActive = false
+                    break
+                end
+
+                local args = {"rebirthRequest"}
+                pcall(function()
+                    rebirthRemote:InvokeServer(unpack(args))
+                end)
             end
         end)
     end
 end)
-local followTab = window:AddTab("Seguir personas")
 
-local playerDropdown = followTab:AddDropdown("Selecciona un jugador", {}, function(selectedName)
-    followPlayerName = selectedName
-    if selectedName == nil or selectedName == "" then
-        isFollowing = false
-        return
-    end
-    isFollowing = true
+-- Rebirth Goal Input
+local RebirthInput = Instance.new("TextBox", FarmPanel)
+RebirthInput.Size = UDim2.new(1, -10, 0, 30)
+RebirthInput.Position = UDim2.new(0, 5, 0, 95)
+RebirthInput.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+RebirthInput.TextColor3 = Color3.new(1, 1, 1)
+RebirthInput.PlaceholderText = "Enter rebirth goal (default = 1)"
+RebirthInput.Text = "1"
+RebirthInput.Font = Enum.Font.Gotham
+RebirthInput.TextScaled = true
+
+RebirthInput.FocusLost:Connect(function(enterPressed)
+    local val = tonumber(RebirthInput.Text)
+    if val and val > 0 then
+        rebirthTarget = val
+    else
+        RebirthInput.Text = tostring(rebirthTarget)
+    end
 end)
 
-local followPlayerName = nil
-local isFollowing = false
-local player = Players.LocalPlayer
+-- AutoFarm Pack Button
+local AutoFarmPackButton = Instance.new("TextButton", FarmPanel)
+AutoFarmPackButton.Size = UDim2.new(1, -10, 0, 40)
+AutoFarmPackButton.Position = UDim2.new(0, 5, 0, 135) -- debajo del input (95 + 30 + 10)
+AutoFarmPackButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AutoFarmPackButton.Text = "AutoFarm Pack"
+AutoFarmPackButton.TextColor3 = Color3.new(1, 1, 1)
+AutoFarmPackButton.Font = Enum.Font.GothamBold
+AutoFarmPackButton.TextScaled = true
 
-local function getGroundPosition(position, ignoreList)
-    local rayOrigin = position + Vector3.new(0, 5, 0)
-    local rayDirection = Vector3.new(0, -50, 0)
+AutoFarmPackButton.MouseButton1Click:Connect(function()
+    --lÃƒÂ³gica de autofarm pack
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    local players = game:GetService("Players")
+    local localPlayer = players.LocalPlayer
 
-    local params = RaycastParams.new()
-    params.FilterDescendantsInstances = ignoreList or {}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local function equipPets()
+        local petFolder = localPlayer:WaitForChild("petsFolder")
+        for _, pet in pairs(petFolder:GetChildren()) do
+            replicatedStorage.rEvents.equipPetRemote:InvokeServer("equip", pet.Name)
+        end
+    end
 
-    local result = workspace:Raycast(rayOrigin, rayDirection, params)
-    return result and result.Position.Y or (position.Y - 4)
+    equipPets()
+end)
+
+AutoRepButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AutoRepButton.Text = "Auto Repetition"
+AutoRepButton.TextColor3 = Color3.new(1, 1, 1)
+AutoRepButton.Font = Enum.Font.GothamBold
+AutoRepButton.TextScaled = true
+AutoRepButton.Parent = FarmPanel
+
+FarmPanel.Parent = ControlFrame
+
+AutoRepButton.MouseButton1Click:Connect(function()
+    autoRepActive = not autoRepActive
+    AutoRepButton.Text = autoRepActive and "Auto Repetition Ã¢Å“â€œ" or "Auto Repetition"
+    AutoRepButton.BackgroundColor3 = autoRepActive and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(50, 50, 50)
+
+    if autoRepActive then
+        autoRepThread = task.spawn(function()
+            local event = LocalPlayer:WaitForChild("muscleEvent")
+            while autoRepActive do
+                task.wait(0.01)
+                event:FireServer("rep")
+            end
+        end)
+    else
+        if autoRepThread then
+            task.cancel(autoRepThread)
+        end
+    end
+end)
+
+-- LoopBring Logic
+local function startLoopBring()
+    if bringConnection then bringConnection:Disconnect() end
+    bringConnection = RunService.RenderStepped:Connect(function()
+        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+        for player in pairs(selectedPlayers) do
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                local hrp = player.Character.HumanoidRootPart
+                hrp.CFrame = myHRP.CFrame
+                hrp.Velocity = Vector3.zero
+                hrp.RotVelocity = Vector3.zero
+            end
+        end
+    end)
 end
 
-local function teleportToPlayer(targetPlayer)
-    if not targetPlayer then return end
-    local targetChar = targetPlayer.Character
-    if targetChar then
-        local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
-        if targetHRP and player.Character then
-            local myHRP = player.Character:FindFirstChild("HumanoidRootPart")
-            if myHRP then
-                local targetPos = targetHRP.Position
-                local offset = Vector3.new(5, 0, 5)
-                local yGround = getGroundPosition(targetPos, {targetChar})
-                local finalPos = Vector3.new(
-                    targetPos.X + offset.X,
-                    yGround + 3,
-                    targetPos.Z + offset.Z
-                )
-                myHRP.CFrame = CFrame.new(finalPos)
-            end
-        end
-    end
+ToggleButton.MouseButton1Click:Connect(function()
+    isActive = not isActive
+    ToggleButton.Text = isActive and "LoopBring: ON" or "LoopBring: OFF"
+    ToggleButton.BackgroundColor3 = isActive and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(255, 80, 80)
+    if isActive then
+        startLoopBring()
+    else
+        if bringConnection then bringConnection:Disconnect() end
+    end
+end)
+
+-- Minimize & Restore
+MinimizeButton.MouseButton1Click:Connect(function()
+    ControlFrame.Visible = false
+    MiniBar.Visible = true
+    ToggleButton.Visible = false
+end)
+
+MiniBar.MouseButton1Click:Connect(function()
+    ControlFrame.Visible = true
+    MiniBar.Visible = false
+    ToggleButton.Visible = true
+end)
+
+-- Auto Equip Fist Tool
+local function autoEquipTool()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local tool = backpack:FindFirstChild("Punch")
+    if tool then
+        tool.Parent = character
+    end
 end
 
--- Función para actualizar la lista del dropdown con nombres actuales de jugadores
-local function updatePlayerDropdown()
-    local names = {}
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= player then
-            table.insert(names, plr.Name)
-        end
-    end
-    playerDropdown:Refresh(names)
+autoEquipTool()
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(0.5)
+    autoEquipTool()
+end)
+
+-- Dead Hits Logic
+-- local deadHitsEnabled = false
+
+local function autoEquipTool()
+    local player = game.Players.LocalPlayer
+    local backpack = player:FindFirstChild("Backpack")
+    local character = player.Character or player.CharacterAdded:Wait()
+    if backpack and character then
+        local tool = backpack:FindFirstChild("Punch")
+        if tool then
+            tool.Parent = character
+        end
+    end
 end
 
--- Actualizar lista al entrar o salir jugadores
-Players.PlayerAdded:Connect(function()
-    updatePlayerDropdown()
+local function startAutoPunch()
+    local player = game.Players.LocalPlayer
+    local event = player:FindFirstChild("muscleEvent")
+    if not event then
+        warn("No se encontrÃƒÂ³ muscleEvent.")
+        return
+    end
+
+    autoEquipTool()
+
+    task.spawn(function()
+        while deadHitsEnabled do
+            for _ = 1, 10 do -- Golpes mÃƒÂºltiples por ciclo
+                pcall(function()
+                    event:FireServer("punch", "leftHand")
+                    event:FireServer("punch", "rightHand")
+                end)
+            end
+            task.wait(0.05) -- Pausa pequeÃƒÂ±a para estabilidad
+        end
+    end)
+end
+
+-- ConexiÃƒÂ³n al botÃƒÂ³n en tu GUI
+DeadButton.MouseButton1Click:Connect(function()
+    deadHitsEnabled = not deadHitsEnabled
+    DeadButton.Text = deadHitsEnabled and "Dead Hits Ã¢Å“â€œ" or "Dead Hits"
+    if deadHitsEnabled then
+        startAutoPunch()
+    end
 end)
 
-Players.PlayerRemoving:Connect(function()
-    updatePlayerDropdown()
+-- Restore on respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if isActive then startLoopBring() end
+    if deadHitsEnabled then startAutoPunch() end
+    blocker.Visible = antiTouchEnabled
 end)
 
--- Inicializamos lista
-updatePlayerDropdown()
+-- Auto Tropical Shake Button - AGREGAR DESPUÃƒâ€°S DE LA LÃƒÂNEA QUE DICE: updateButtonVisual()
+local autoTropicalEnabled = false
 
--- Loop para seguir al jugador seleccionado
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if isFollowing and followPlayerName then
-            local target = Players:FindFirstChild(followPlayerName)
-            if target then
-                teleportToPlayer(target)
-            else
-                isFollowing = false
-                playerDropdown:Set(nil)
-            end
-        end
-    end
+local AutoTropicalButton = Instance.new("TextButton", FarmPanel)
+AutoTropicalButton.Size = UDim2.new(1, -10, 0, 40)
+AutoTropicalButton.Position = UDim2.new(0, 5, 0, 180)
+AutoTropicalButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+AutoTropicalButton.Text = "Auto Tropical Shake"
+AutoTropicalButton.TextColor3 = Color3.new(1, 1, 1)
+AutoTropicalButton.Font = Enum.Font.GothamBold
+AutoTropicalButton.TextScaled = true
+
+-- FunciÃƒÂ³n para iniciar el auto consume de Tropical Shake
+local function startAutoTropicalShake()
+    task.spawn(function()
+        local player = game.Players.LocalPlayer
+        while autoTropicalEnabled do
+            local character = player.Character or player.CharacterAdded:Wait()
+            local shake = character:FindFirstChild("Tropical Shake")
+            if shake then
+                local args = {
+                    [1] = "tropicalShake",
+                    [2] = shake
+                }
+                pcall(function()
+                    player:WaitForChild("muscleEvent"):FireServer(unpack(args))
+                end)
+            end
+            wait(0.01)
+        end
+    end)
+end
+
+AutoTropicalButton.MouseButton1Click:Connect(function()
+    autoTropicalEnabled = not autoTropicalEnabled
+    AutoTropicalButton.Text = autoTropicalEnabled and "Auto Tropical Shake Ã¢Å“â€œ" or "Auto Tropical Shake"
+    AutoTropicalButton.BackgroundColor3 = autoTropicalEnabled and Color3.fromRGB(80, 255, 80) or Color3.fromRGB(50, 50, 50)
+    
+    if autoTropicalEnabled then
+        startAutoTropicalShake()
+    end
 end)
-
