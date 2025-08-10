@@ -56,7 +56,6 @@ removePortals()
 
 local blockedFrames = {
     "strengthFrame",
-    "durabilityFrame",
     "agilityFrame",
 }
 
