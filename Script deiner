@@ -4,7 +4,7 @@ local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local window =
     library:AddWindow(
-    "Muscle Legends| Ducks",
+    "Pheonix Private",
     {
         main_color = Color3.fromRGB(255, 0, 0),
         min_size = Vector2.new(700, 650),
